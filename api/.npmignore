@@ -1,0 +1,10 @@
+src
+test
+dist
+node_modules
+.gitignore
+.prettierrc
+nest-cli.json
+README.md
+tsconfig.json
+tsconfig.build.json
