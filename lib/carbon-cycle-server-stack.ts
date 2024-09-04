@@ -3,6 +3,7 @@ import * as elasticbeanstalk from 'aws-cdk-lib/aws-elasticbeanstalk';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as s3assets from 'aws-cdk-lib/aws-s3-assets';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 import * as path from 'path';
 
@@ -56,6 +57,18 @@ export class CarbonCycleServerStack extends cdk.Stack {
     // Ensure the application version is created after the application
     appVersion.addDependency(app);
 
+    // Create an IAM instance profile for Elastic Beanstalk
+    const instanceProfile = new iam.CfnInstanceProfile(this, 'InstanceProfile', {
+      instanceProfileName: 'carbon-cycle-instance-profile',
+      roles: [new iam.Role(this, 'EBRole', {
+        assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
+        managedPolicies: [
+          iam.ManagedPolicy.fromAwsManagedPolicyName('AWSElasticBeanstalkWebTier'),
+          iam.ManagedPolicy.fromAwsManagedPolicyName('AWSElasticBeanstalkMulticontainerDocker'),
+        ],
+      }).roleName],
+    });
+
     // Create Elastic Beanstalk environment
     const environment = new elasticbeanstalk.CfnEnvironment(this, 'CarbonCycleEnvironment', {
       environmentName: 'CarbonCycleEnvironment',
@@ -65,7 +78,7 @@ export class CarbonCycleServerStack extends cdk.Stack {
         {
           namespace: 'aws:autoscaling:launchconfiguration',
           optionName: 'IamInstanceProfile',
-          value: 'aws-elasticbeanstalk-ec2-role',
+          value: instanceProfile.ref,
         },
         {
           namespace: 'aws:ec2:instances',
@@ -86,6 +99,21 @@ export class CarbonCycleServerStack extends cdk.Stack {
           namespace: 'aws:elasticbeanstalk:application:environment',
           optionName: 'DATABASE_NAME',
           value: 'carboncycledb',
+        },
+        {
+          namespace: 'aws:elasticbeanstalk:container:nodejs',
+          optionName: 'NodeVersion',
+          value: '18.x',
+        },
+        {
+          namespace: 'aws:elasticbeanstalk:container:nodejs',
+          optionName: 'ProxyServer',
+          value: 'nginx',
+        },
+        {
+          namespace: 'aws:elasticbeanstalk:environment',
+          optionName: 'EnvironmentType',
+          value: 'SingleInstance',
         },
       ],
       versionLabel: appVersion.ref,
