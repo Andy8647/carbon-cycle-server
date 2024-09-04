@@ -21,22 +21,31 @@ export class CarbonCycleServerStack extends cdk.Stack {
       instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-      databaseName: 'carboncycle',
+      databaseName: 'carboncycledb',
       credentials: rds.Credentials.fromGeneratedSecret('carboncycleuser'),
     });
 
     // Package NestJS application
     const appAsset = new s3assets.Asset(this, 'NestJSAppZip', {
       path: path.join(__dirname, '..', 'api'),
+      bundling: {
+        image: cdk.DockerImage.fromRegistry('public.ecr.aws/docker/library/node:18'),
+        command: [
+          '/bin/sh',
+          '-c',
+          'npm ci && npm run build && mkdir -p /asset-output && cp -r dist node_modules package.json /asset-output/'
+        ],
+        user: 'root',
+      },
     });
 
-    // Create Elastic Beanstalk app
+    // Create Elastic Beanstalk application
     const app = new elasticbeanstalk.CfnApplication(this, 'CarbonCycleApp', {
       applicationName: 'carbon-cycle-app',
     });
 
     // Create application version
-    const appVersionProps = new elasticbeanstalk.CfnApplicationVersion(this, 'AppVersion', {
+    const appVersion = new elasticbeanstalk.CfnApplicationVersion(this, 'AppVersion', {
       applicationName: app.applicationName || 'carbon-cycle-app',
       sourceBundle: {
         s3Bucket: appAsset.s3BucketName,
@@ -44,11 +53,14 @@ export class CarbonCycleServerStack extends cdk.Stack {
       },
     });
 
+    // Ensure the application version is created after the application
+    appVersion.addDependency(app);
+
     // Create Elastic Beanstalk environment
     const environment = new elasticbeanstalk.CfnEnvironment(this, 'CarbonCycleEnvironment', {
       environmentName: 'CarbonCycleEnvironment',
       applicationName: app.applicationName || 'carbon-cycle-app',
-      solutionStackName: '64bit Amazon Linux 2 v5.8.0 running Node.js 18',
+      solutionStackName: '64bit Amazon Linux 2 v5.9.5 running Node.js 18',
       optionSettings: [
         {
           namespace: 'aws:autoscaling:launchconfiguration',
@@ -73,14 +85,14 @@ export class CarbonCycleServerStack extends cdk.Stack {
         {
           namespace: 'aws:elasticbeanstalk:application:environment',
           optionName: 'DATABASE_NAME',
-          value: 'carboncycle',
+          value: 'carboncycledb',
         },
       ],
-      versionLabel: appVersionProps.ref,
+      versionLabel: appVersion.ref,
     });
 
     // Ensure the environment is created after the application version
-    environment.addDependency(appVersionProps);
+    environment.addDependency(appVersion);
 
     // Output the database endpoint
     new cdk.CfnOutput(this, 'DatabaseEndpoint', {
