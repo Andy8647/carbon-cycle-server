@@ -164,6 +164,11 @@ export class CarbonCycleServerStack extends cdk.Stack {
             optionName: "ProxyServer",
             value: "nginx",
           },
+          {
+            namespace: "aws:elasticbeanstalk:application:environment",
+            optionName: "PORT",
+            value: "8080",
+          },
         ],
         versionLabel: appVersion.ref,
       }
