@@ -5,7 +5,7 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_DB: carboncycle
+      POSTGRES_DB: carboncycledb
       POSTGRES_USER: andy
       POSTGRES_PASSWORD: andy
     volumes:
